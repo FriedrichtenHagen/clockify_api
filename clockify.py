@@ -5,21 +5,23 @@ from pprint import pprint
 import pandas as pd
 import json
 
-# https://docs.clockify.me/#tag/Task
+# Clockify docs: https://docs.clockify.me/#tag/Task
 
 load_dotenv()
 API_KEY = os.getenv('API_KEY')
 USER_ID = os.getenv('USER_ID')
+# the shared report ID can be found in the url. Example url: https://app.clockify.me/shared/654g45283f84759g98rf93847
 WORKSPACE_ID = os.getenv('WORKSPACE_ID')
-# the shared report ID can be found in the url. https://app.clockify.me/shared/654g45283f84759g98rf93847
-SHARED_REPORT_ID = os.getenv('SHARED_REPORT_ID')
+# report time frame is set to last 14 days. This allows for late entry of time tracking by users
+SHARED_REPORT_ID_2_WEEKS = os.getenv('SHARED_REPORT_ID_2_WEEKS')
 
-url = f"https://reports.api.clockify.me/v1/shared-reports/{SHARED_REPORT_ID}"
+url = f"https://reports.api.clockify.me/v1/shared-reports/{SHARED_REPORT_ID_2_WEEKS}"
 
 headers = {
     "x-api-key": API_KEY,
     "Content-Type": "application/json", 
 }
+# maximumm entries per page: 200
 page_size = 200
 start_params = {
     "page": 1,
@@ -35,10 +37,6 @@ def make_request(params, result_df):
             print("Request successful")
             json_data = response.json()
 
-            # extract page count needed for pagination
-            entries_count = json_data.get("totals", [])[0].get("entriesCount")
-            print(f'pages: {entries_count}')
-
             # Extracting values from each object in timeentries
             entries_data = []
             for entry in json_data.get("timeentries", []):
@@ -48,6 +46,7 @@ def make_request(params, result_df):
                     "user_name": entry.get("userName"),
                     "duration_minutes": (entry.get("timeInterval").get("duration"))/60,
                     "billing_amount_euro": entry.get("amount"),
+                    "tags": [tag.get('name') for tag in entry.get("tags", [])]
                 }
                 entries_data.append(entry_data)
 
@@ -70,12 +69,12 @@ def paginate():
 
         # Check if the request was successful (status code 200)
         if response.status_code == 200:
-            print("Request successful")
+            print("Initial request successful")
             json_data = response.json()
 
             # extract page count needed for pagination
             entries_count = json_data.get("totals", [])[0].get("entriesCount")
-            print(f'pages: {entries_count}')
+            print(f'total entries: {entries_count}')
 
         else:
             print(f"Request failed with status code: {response.status_code}")
@@ -93,20 +92,16 @@ def paginate():
             "page": page_index,
             "pageSize": 200,
         }
+        print(f'page request number {page_index}')
         result_df = make_request(request_params, result_df)
     print(result_df.index)
+    return result_df
 
+def incremental_import():
+    # destination change comparison
+    # compare existing table with imported table
+    print('test')
 
-
-
-
-
-
-# paginate()
-# need to use more than 1 day
-    # pagination
-    # incremental import
-        
-# for testing
-result_df = pd.DataFrame()
-print(make_request(start_params, result_df))
+last_two_weeks_df = paginate()
+print(last_two_weeks_df)
+last_two_weeks_df.to_csv('test.csv', index=False)
